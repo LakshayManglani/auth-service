@@ -59,6 +59,10 @@ We welcome contributions from the community. Please follow these steps to contri
 
 For more details on the commit format and other guidelines, please refer to the [Contributor Guidelines](./CONTRIBUTING.md).
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 ## Contact
 
 For any inquiries or issues, please open an issue on GitHub or reach out to us using the following email addresses:
