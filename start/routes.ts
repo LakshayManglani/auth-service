@@ -8,8 +8,10 @@
 */
 
 const AuthController = () => import('#controllers/auth_controller')
+const UsersController = () => import('#controllers/users_controller')
 import { HttpContext } from '@adonisjs/core/http'
 import router from '@adonisjs/core/services/router'
+import { middleware } from './kernel.js'
 
 router.get('/health', async ({ response }: HttpContext) => {
   return response.status(200).json({
@@ -30,6 +32,15 @@ router
             router.post('/login', [AuthController, 'login'])
           })
           .prefix('/auth')
+
+        router
+          .get('/self', [UsersController, 'self'])
+          .use(
+            middleware.auth({
+              guards: ['api'],
+            })
+          )
+          .prefix('/users')
       })
       .prefix('/v1')
   })
