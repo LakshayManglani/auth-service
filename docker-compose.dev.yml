@@ -1,0 +1,22 @@
+services:
+  # Redis
+  redis-db:
+    container_name: redis-container
+    image: redis:latest
+    restart: always
+  
+  # API Gateway
+  api-gateway:
+    image: lakshaymanglani/api-gateway:development
+    ports:
+      - ${PORT}:${PORT}
+    depends_on:
+      - redis-db
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    env_file:
+      - .env.dev

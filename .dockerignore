@@ -1,0 +1,42 @@
+# Node modules are installed during the image build, so no need to include them here
+node_modules
+npm-debug.log
+
+# Logs
+*.log
+
+# Environment files
+.env
+
+# Build artifacts and temporary files
+dist
+build
+tmp
+temp
+
+# Test directories
+tests
+test
+
+# IDEs and editors specific files
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Docker files
+Dockerfile
+Dockerfile.dev
+docker-compose.yml
+docker-compose.yml
+
+# Other ignored files
+*.tgz
+*.zip
+*.tar.gz

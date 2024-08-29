@@ -1,0 +1,19 @@
+services:
+  # Redis
+  redis-db:
+    container_name: redis-container
+    image: redis:latest
+    restart: always
+  
+  # API Gateway
+  api-gateway:
+    image: lakshaymanglani/api-gateway:production
+    ports:
+      - ${PORT}:${PORT}
+    depends_on:
+      - redis-db
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
