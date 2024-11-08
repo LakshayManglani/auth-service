@@ -12,25 +12,35 @@ import passport from "passport";
 import { TempGoogleUser } from "../models/tempGoogleUser.model.js";
 
 const checkAvailability = asyncHandler(async (req, res) => {
-  const { email, username } = req.body;
+  const { email, username } = req.query;
 
-  const existedUserByEmail = await User.findOne({ email });
-  const existedUserByUsername = await User.findOne({ username });
+  const result = {};
 
-  return res.status(200).json(
-    apiResponse(
-      200,
-      {
-        email: existedUserByEmail === null,
-        username: existedUserByUsername === null,
-      },
-      "Check availability successfully."
-    )
-  );
+  if (email) {
+    if (!validator.isEmail(email)) {
+      result.email = false;
+    } else {
+      const existedUser = await User.findOne({ email });
+      result.email = existedUser === null;
+    }
+  }
+
+  if (username) {
+    if (!validator.isAlphanumeric(username)) {
+      result.username = false;
+    } else {
+      const existedUser = await User.findOne({ username });
+      result.username = existedUser === null;
+    }
+  }
+
+  return res
+    .status(200)
+    .json(apiResponse(200, result, "Check availability successfully."));
 });
 
 const sendVerificationEmail = asyncHandler(async (req, res) => {
-  const { givenName, familyName, email, username, password, gender } = req.body;
+  const { givenName, familyName, email, username, password } = req.body;
   // ====> Send Email <====
 
   // write code to find user by email or username
@@ -55,7 +65,6 @@ const sendVerificationEmail = asyncHandler(async (req, res) => {
     familyName,
     username,
     password,
-    gender,
   });
 
   await kafkaProducer.getInstance().send({
@@ -106,7 +115,6 @@ const verifyAndCreate = asyncHandler(async (req, res) => {
     givenName: tempUser.givenName,
     familyName: tempUser.familyName,
     password: tempUser.password,
-    gender: tempUser.gender,
     loginType: UserLoginEnum.EMAIL_PASSWORD,
   });
 

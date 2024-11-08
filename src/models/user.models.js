@@ -45,7 +45,6 @@ const userSchema = new Schema(
     gender: {
       type: String,
       enum: AvailableUserGenders,
-      required: true,
     },
     role: {
       type: String,
