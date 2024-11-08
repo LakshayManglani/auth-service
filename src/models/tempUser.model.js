@@ -1,5 +1,4 @@
 import { Schema, model } from "mongoose";
-import { AvailableUserGenders } from "../constants.js";
 
 const tempUserSchema = new Schema({
   token: {
@@ -25,12 +24,6 @@ const tempUserSchema = new Schema({
   },
   familyName: {
     type: String,
-    required: true,
-  },
-  gender: {
-    type: String,
-    enum: AvailableUserGenders,
-    required: true,
   },
   createdAt: {
     type: Date,
