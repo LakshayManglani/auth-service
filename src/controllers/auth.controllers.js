@@ -4,24 +4,35 @@ import { ApiError } from "../utils/apiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import kafkaProducer from "../utils/kafkaProducer.js";
 import { apiResponse } from "../utils/apiResponse.js";
-import { User } from "../models/user.models.js";
+import { AuthUser } from "../models/authUser.models.js";
 import { TempUser } from "../models/tempUser.model.js";
 import { UserLoginEnum } from "../constants.js";
 import validator from "validator";
 import passport from "passport";
 import { TempGoogleUser } from "../models/tempGoogleUser.model.js";
 
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: "strict",
+  secure: env.isProd,
+  priority: "high",
+};
+
 const checkAvailability = asyncHandler(async (req, res) => {
   const { email, username } = req.query;
 
+  if (!email && !username) {
+    throw new ApiError(400, "Email or username is required.");
+  }
+
   const result = {};
+  const conditions = [];
 
   if (email) {
     if (!validator.isEmail(email)) {
       result.email = false;
     } else {
-      const existedUser = await User.findOne({ email });
-      result.email = existedUser === null;
+      conditions.push({ email });
     }
   }
 
@@ -29,8 +40,21 @@ const checkAvailability = asyncHandler(async (req, res) => {
     if (!validator.isAlphanumeric(username)) {
       result.username = false;
     } else {
-      const existedUser = await User.findOne({ username });
-      result.username = existedUser === null;
+      conditions.push({ username });
+    }
+  }
+
+  if (conditions.length > 0) {
+    const existingUsers = await AuthUser.find({ $or: conditions });
+
+    if (email && result.email !== false) {
+      result.email = !existingUsers.some((user) => user.email === email);
+    }
+
+    if (username && result.username !== false) {
+      result.username = !existingUsers.some(
+        (user) => user.username === username
+      );
     }
   }
 
@@ -41,12 +65,11 @@ const checkAvailability = asyncHandler(async (req, res) => {
 
 const sendVerificationEmail = asyncHandler(async (req, res) => {
   const { givenName, familyName, email, username, password } = req.body;
-  // ====> Send Email <====
 
-  // write code to find user by email or username
-  const existedUser = await User.findOne({ $or: [{ email }, { username }] });
-
-  if (existedUser) {
+  const existingUser = await AuthUser.findOne({
+    $or: [{ email }, { username }],
+  });
+  if (existingUser) {
     throw new ApiError(409, "User already exists.");
   }
 
@@ -67,20 +90,22 @@ const sendVerificationEmail = asyncHandler(async (req, res) => {
     password,
   });
 
+  const message = {
+    id: tempUser._id,
+    type: "auth/verification",
+    data: {
+      username,
+      verificationLink: `${env.VERIFICATION_LINK}/${token}`,
+      to: email,
+    },
+  };
+
   await kafkaProducer.getInstance().send({
     topic: "email",
     messages: [
       {
         partition: 0,
-        value: JSON.stringify({
-          id: tempUser._id,
-          type: "auth/verification",
-          data: {
-            username,
-            verificationLink: `${env.VERIFICATION_LINK}/${token}`,
-            to: email,
-          },
-        }),
+        value: JSON.stringify(message),
       },
     ],
   });
@@ -97,7 +122,9 @@ const verifyAndCreate = asyncHandler(async (req, res) => {
     String(env.VERIFICATION_TOKEN_SECRET)
   );
 
-  const existedUser = await User.findOne({ $or: [{ email }, { username }] });
+  const existedUser = await AuthUser.findOne({
+    $or: [{ email }, { username }],
+  });
 
   if (existedUser) {
     throw new ApiError(409, "User already exists.");
@@ -109,7 +136,7 @@ const verifyAndCreate = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Token not found.");
   }
 
-  const user = new User({
+  const user = new AuthUser({
     email,
     username,
     givenName: tempUser.givenName,
@@ -121,9 +148,15 @@ const verifyAndCreate = asyncHandler(async (req, res) => {
   await user.save();
   await tempUser.deleteOne();
 
-  return res
-    .status(201)
-    .json(apiResponse(201, null, "User created successfully."));
+  return res.status(201).json(
+    apiResponse(
+      201,
+      {
+        _id: user._id,
+      },
+      "User created successfully."
+    )
+  );
 });
 
 const login = asyncHandler(async (req, res) => {
@@ -133,7 +166,7 @@ const login = asyncHandler(async (req, res) => {
   const query = isEmail
     ? { email: emailOrUsername }
     : { username: emailOrUsername };
-  const user = await User.findOne(query);
+  const user = await AuthUser.findOne(query);
 
   if (!user) {
     throw new ApiError(404, "User not found.");
@@ -147,7 +180,6 @@ const login = asyncHandler(async (req, res) => {
   const refreshToken = user.generateRefreshToken();
 
   user.refreshToken.push(refreshToken);
-
   await user.save();
 
   return res
@@ -156,13 +188,15 @@ const login = asyncHandler(async (req, res) => {
       httpOnly: true,
       maxAge: env.REFRESH_TOKEN_EXPIRES * 1000,
       sameSite: "strict",
-      secure: env.NODE_ENV === "production",
+      secure: env.isProd,
+      priority: "high",
     })
     .cookie("accessToken", accessToken, {
       httpOnly: true,
       maxAge: env.ACCESS_TOKEN_EXPIRES * 1000,
       sameSite: "strict",
-      secure: env.NODE_ENV === "production",
+      secure: env.isProd,
+      priority: "high",
     })
     .json(
       apiResponse(
@@ -185,7 +219,7 @@ const logout = asyncHandler(async (req, res) => {
 
   const { _id } = jwt.verify(refreshToken, String(env.REFRESH_TOKEN_SECRET));
 
-  const user = await User.findById(_id);
+  const user = await AuthUser.findById(_id);
   if (user) {
     user.refreshToken = user.refreshToken.filter(
       (token) => token !== refreshToken
@@ -195,16 +229,8 @@ const logout = asyncHandler(async (req, res) => {
 
   return res
     .status(201)
-    .clearCookie("refreshToken", {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: env.NODE_ENV === "production",
-    })
-    .clearCookie("accessToken", {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: env.NODE_ENV === "production",
-    })
+    .clearCookie("refreshToken", cookieOptions)
+    .clearCookie("accessToken", cookieOptions)
     .json(apiResponse(201, null, "User logged out successfully."));
 });
 
@@ -216,8 +242,7 @@ const generateTokens = asyncHandler(async (req, res) => {
 
   const { _id } = jwt.verify(refreshToken, String(env.REFRESH_TOKEN_SECRET));
 
-  const user = await User.findById(_id);
-
+  const user = await AuthUser.findById(_id);
   if (!user) {
     throw new ApiError(404, "User not found.");
   }
@@ -239,16 +264,12 @@ const generateTokens = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .cookie("refreshToken", newRefreshToken, {
-      httpOnly: true,
+      ...cookieOptions,
       maxAge: env.REFRESH_TOKEN_EXPIRES * 1000,
-      sameSite: "strict",
-      secure: env.NODE_ENV === "production",
     })
     .cookie("accessToken", accessToken, {
-      httpOnly: true,
+      ...cookieOptions,
       maxAge: env.ACCESS_TOKEN_EXPIRES * 1000,
-      sameSite: "strict",
-      secure: env.NODE_ENV === "production",
     })
     .json(
       apiResponse(
@@ -263,19 +284,33 @@ const generateTokens = asyncHandler(async (req, res) => {
 });
 
 const generateAccessToken = asyncHandler(async (req, res) => {
-  const payload = { _id: req.user._id };
-  const accessToken = jwt.sign(payload, String(env.ACCESS_TOKEN_SECRET), {
-    expiresIn: env.ACCESS_TOKEN_EXPIRES,
-  });
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) {
+    throw new ApiError(400, "Refresh token not found.");
+  }
+
+  const { _id } = jwt.verify(refreshToken, String(env.REFRESH_TOKEN_SECRET));
+  const user = await AuthUser.findById(_id);
+
+  if (!user) {
+    throw new ApiError(404, "User not found.");
+  }
+
+  if (!user.refreshToken.includes(refreshToken)) {
+    throw new ApiError(400, "Invalid refresh token.");
+  }
+
+  const accessToken = user.generateAccessToken();
+
   return res
     .status(201)
     .cookie("accessToken", accessToken, {
-      httpOnly: true,
+      ...cookieOptions,
       maxAge: env.ACCESS_TOKEN_EXPIRES * 1000,
-      sameSite: "strict",
-      secure: env.NODE_ENV === "production",
     })
-    .json(apiResponse(201, null, "Access token refreshed successfully."));
+    .json(
+      apiResponse(201, { accessToken }, "Access token refreshed successfully.")
+    );
 });
 
 const google = passport.authenticate("google", {
@@ -287,7 +322,9 @@ const googleCallback = passport.authenticate("google", {
 });
 
 const googleRedirect = asyncHandler(async (req, res) => {
-  const existedUser = await User.findOne({ email: req.user.emails[0].value });
+  const existedUser = await AuthUser.findOne({
+    email: req.user.emails[0].value,
+  });
 
   if (!existedUser) {
     const tempGoogleUser = new TempGoogleUser({

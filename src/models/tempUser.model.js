@@ -1,5 +1,6 @@
 import { Schema, model } from "mongoose";
 
+// TODO: Make sure that password is encrypted
 const tempUserSchema = new Schema({
   token: {
     type: String,

@@ -31,6 +31,7 @@ function createAuthV1Router() {
   router.route("/google").get(google);
   router.route("/google/callback").get(googleCallback, googleRedirect);
 
+  // TODO: implement
   router.route("/password/forgot").post();
   router.route("/password/reset").post();
   router.route("/password/change").post();

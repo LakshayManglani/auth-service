@@ -5,13 +5,12 @@ import {
   AvailableUserLogins,
   AccountStatusEnum,
   AvailableAccountStatus,
-  AvailableUserGenders,
 } from "../constants.js";
 import jwt from "jsonwebtoken";
 import bcryptjs from "bcryptjs";
 import env from "../config/env.config.js";
 
-const userSchema = new Schema(
+const authUserSchema = new Schema(
   {
     username: {
       type: String,
@@ -30,21 +29,6 @@ const userSchema = new Schema(
     },
     password: {
       type: String,
-    },
-    givenName: {
-      type: String,
-      required: true,
-    },
-    familyName: {
-      type: String,
-      default: "",
-    },
-    avatarURL: {
-      type: String,
-    },
-    gender: {
-      type: String,
-      enum: AvailableUserGenders,
     },
     role: {
       type: String,
@@ -75,7 +59,7 @@ const userSchema = new Schema(
   }
 );
 
-userSchema.pre("save", async function (next) {
+authUserSchema.pre("save", async function (next) {
   try {
     if (!this.isModified("password")) {
       return next();
@@ -90,11 +74,11 @@ userSchema.pre("save", async function (next) {
   }
 });
 
-userSchema.methods.isPasswordCorrect = function (password) {
+authUserSchema.methods.isPasswordCorrect = function (password) {
   return bcryptjs.compareSync(password, this.password);
 };
 
-userSchema.methods.generateAccessToken = function () {
+authUserSchema.methods.generateAccessToken = function () {
   const payload = { _id: this._id };
 
   return jwt.sign(payload, String(env.ACCESS_TOKEN_SECRET), {
@@ -102,7 +86,7 @@ userSchema.methods.generateAccessToken = function () {
   });
 };
 
-userSchema.methods.generateRefreshToken = function () {
+authUserSchema.methods.generateRefreshToken = function () {
   const payload = { _id: this._id };
 
   return jwt.sign(payload, env.REFRESH_TOKEN_SECRET, {
@@ -110,6 +94,6 @@ userSchema.methods.generateRefreshToken = function () {
   });
 };
 
-const User = model("User", userSchema);
+const AuthUser = model("AuthUser", authUserSchema);
 
-export { User };
+export { AuthUser };
