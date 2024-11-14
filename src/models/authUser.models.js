@@ -94,6 +94,6 @@ authUserSchema.methods.generateRefreshToken = function () {
   });
 };
 
-const AuthUser = model("AuthUser", authUserSchema);
+const AuthUser = model("Auth_User", authUserSchema);
 
 export { AuthUser };
