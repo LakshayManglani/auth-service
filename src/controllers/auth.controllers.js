@@ -146,8 +146,29 @@ const verifyAndCreate = asyncHandler(async (req, res) => {
   });
 
   await user.save();
+  try {
+    await kafkaProducer.getInstance().send({
+      topic: "user",
+      messages: [
+        {
+          value: JSON.stringify({
+            data: {
+              authUserId: user._id,
+              username: user.username,
+              email: user.email,
+              givenName: tempUser.givenName,
+              familyName: tempUser.familyName,
+            },
+          }),
+        },
+      ],
+    });
+    console.log("User creation event sent to Kafka successfully.");
+  } catch (error) {
+    console.error("Failed to publish event to Kafka:", error);
+    throw new ApiError(500, "Failed to send user creation event.");
+  }
   await tempUser.deleteOne();
-
   return res.status(201).json(
     apiResponse(
       201,
