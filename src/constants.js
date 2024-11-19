@@ -39,6 +39,15 @@ const UserGenderEnum = Object.freeze({
 
 const AvailableUserGenders = Object.freeze(Object.values(UserGenderEnum));
 
+const VerificationTokenEnum = Object.freeze({
+  REGISTER: "REGISTER",
+  UPDATE_EMAIL: "UPDATE_EMAIL",
+});
+
+const AvailableVerificationTokens = Object.freeze(
+  Object.values(VerificationTokenEnum)
+);
+
 export {
   UserRoleEnum,
   AvailableUserRoles,
@@ -48,4 +57,6 @@ export {
   AvailableAccountStatus,
   UserGenderEnum,
   AvailableUserGenders,
+  VerificationTokenEnum,
+  AvailableVerificationTokens,
 };

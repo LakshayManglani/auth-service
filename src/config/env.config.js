@@ -17,7 +17,7 @@ const env = cleanEnv(process.env, {
   REFRESH_TOKEN_SECRET: str({ default: "refresh-token-secret" }),
   REFRESH_TOKEN_EXPIRES: num({ default: 60 * 60 * 24 * 30 }),
   VERIFICATION_TOKEN_SECRET: str({ default: "verification-token-secret" }),
-  VERIFICATION_TOKEN_EXPIRES: num({ default: 60 * 60 }),
+  VERIFICATION_TOKEN_EXPIRES: num({ default: 60 * 60 * 24 }),
   VERIFICATION_LINK: str({ default: "http://localhost:3000/auth/verify" }),
 
   DB_URI: str({ default: "mongodb://localhost:27017" }),
