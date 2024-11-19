@@ -6,7 +6,7 @@ import kafkaProducer from "../utils/kafkaProducer.js";
 import { apiResponse } from "../utils/apiResponse.js";
 import { AuthUser } from "../models/authUser.models.js";
 import { TempUser } from "../models/tempUser.model.js";
-import { UserLoginEnum } from "../constants.js";
+import { UserLoginEnum, VerificationTokenEnum } from "../constants.js";
 import validator from "validator";
 import passport from "passport";
 import { TempGoogleUser } from "../models/tempGoogleUser.model.js";
@@ -151,6 +151,7 @@ const verifyAndCreate = asyncHandler(async (req, res) => {
     messages: [
       {
         value: JSON.stringify({
+          eventType: "createUser",
           data: {
             authUserId: user._id,
             username: user.username,
@@ -366,6 +367,161 @@ const googleRedirect = asyncHandler(async (req, res) => {
   return res.redirect("/");
 });
 
+const updateUsername = asyncHandler(async (req, res) => {
+  const { username } = req.body;
+  const userId = req.headers["user-id"];
+  if (!userId) {
+    throw new ApiError(400, "User id is required.");
+  }
+  const user = await AuthUser.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found.");
+  }
+
+  if (!validator.isAlphanumeric(username)) {
+    throw new ApiError(400, "Username is invalid.");
+  }
+
+  const existingUser = await AuthUser.findOne({ username });
+
+  if (existingUser) {
+    throw new ApiError(409, "Username already exists.");
+  }
+
+  user.username = username;
+  await user.save();
+
+  await kafkaProducer.getInstance().send({
+    topic: "user",
+    messages: [
+      {
+        value: JSON.stringify({
+          eventType: "updateUsername",
+          data: {
+            authUserId: user._id,
+            username: user.username,
+          },
+        }),
+      },
+    ],
+  });
+
+  return res
+    .status(200)
+    .json(apiResponse(200, null, "Username changed successfully."));
+});
+
+const requestEmailUpdate = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  const userId = req.headers["user-id"];
+  console.log("userId", userId);
+  if (!userId) {
+    throw new ApiError(400, "User ID is required.");
+  }
+
+  const existingUser = await AuthUser.findOne({ _id: userId });
+  if (!existingUser) {
+    throw new ApiError(404, "User not found.");
+  }
+
+  if (!existingUser.isPasswordCorrect(password)) {
+    throw new ApiError(400, "Password is incorrect.");
+  }
+
+  const emailExists = await AuthUser.findOne({ email: email });
+  if (emailExists) {
+    throw new ApiError(409, "Email already in use.");
+  }
+
+  const token = jwt.sign(
+    { userId, email },
+    String(env.VERIFICATION_TOKEN_SECRET),
+    {
+      expiresIn: env.VERIFICATION_TOKEN_EXPIRES,
+    }
+  );
+
+  await TempUser.create({
+    userId,
+    email,
+    token,
+    tokenType: VerificationTokenEnum.EMAIL_UPDATE,
+  });
+
+  const message = {
+    id: userId,
+    type: "auth/update-email-verification",
+    data: {
+      username: existingUser.username,
+      verificationLink: `${env.VERIFICATION_LINK}/${token}`,
+      to: email,
+    },
+  };
+
+  await kafkaProducer.getInstance().send({
+    topic: "email",
+    messages: [
+      {
+        partition: 0,
+        value: JSON.stringify(message),
+      },
+    ],
+  });
+
+  return res
+    .status(200)
+    .json(apiResponse(200, null, "Verification email sent for email update."));
+});
+
+const verifyAndUpdateEmail = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+
+  const { userId, email } = jwt.verify(
+    token,
+    String(env.VERIFICATION_TOKEN_SECRET)
+  );
+
+  const tempUser = await TempUser.findOne({ token });
+  if (!tempUser) {
+    throw new ApiError(404, "Invalid or expired token.");
+  }
+
+  const user = await AuthUser.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "User not found.");
+  }
+
+  user.email = email;
+  await user.save();
+
+  // Publish the update email event
+  await kafkaProducer.getInstance().send({
+    topic: "user",
+    messages: [
+      {
+        value: JSON.stringify({
+          eventType: "updateEmail",
+          data: {
+            authUserId: user._id,
+            username: user.username,
+            newEmail: user.email,
+          },
+        }),
+      },
+    ],
+  });
+  console.log("Email update event sent to Kafka successfully.");
+
+  await tempUser.deleteOne();
+
+  return res
+    .status(200)
+    .json(
+      apiResponse(200, { email: user.email }, "Email updated successfully.")
+    );
+});
+
 export {
   checkAvailability,
   sendVerificationEmail,
@@ -377,4 +533,7 @@ export {
   google,
   googleCallback,
   googleRedirect,
+  updateUsername,
+  requestEmailUpdate,
+  verifyAndUpdateEmail,
 };

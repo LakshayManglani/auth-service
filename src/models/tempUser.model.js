@@ -1,4 +1,8 @@
 import { Schema, model } from "mongoose";
+import {
+  AvailableVerificationTokens,
+  VerificationTokenEnum,
+} from "../constants.js";
 
 // TODO: Make sure that password is encrypted
 const tempUserSchema = new Schema({
@@ -7,9 +11,15 @@ const tempUserSchema = new Schema({
     required: true,
     unique: true,
   },
-  username: {
+  tokenType: {
     type: String,
     required: true,
+    enum: AvailableVerificationTokens,
+    default: VerificationTokenEnum.REGISTER,
+  },
+  username: {
+    type: String,
+    required: false,
   },
   email: {
     type: String,
@@ -17,11 +27,9 @@ const tempUserSchema = new Schema({
   },
   password: {
     type: String,
-    required: true,
   },
   givenName: {
     type: String,
-    required: true,
   },
   familyName: {
     type: String,

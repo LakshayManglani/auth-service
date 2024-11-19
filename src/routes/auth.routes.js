@@ -8,8 +8,11 @@ import {
   googleRedirect,
   login,
   logout,
+  requestEmailUpdate,
   sendVerificationEmail,
+  updateUsername,
   verifyAndCreate,
+  verifyAndUpdateEmail,
 } from "../controllers/auth.controllers.js";
 
 /**
@@ -24,6 +27,10 @@ function createAuthV1Router() {
   router.route("/register/verify-and-create").post(verifyAndCreate);
   router.route("/login").post(login);
   router.route("/logout").post(logout);
+
+  router.route("/update/username").patch(updateUsername);
+  router.route("/update/send-verification-email").post(requestEmailUpdate);
+  router.route("/update/email").patch(verifyAndUpdateEmail);
 
   router.route("/tokens").post(generateTokens);
   router.route("/tokens/access-token").post(generateAccessToken);
