@@ -202,18 +202,12 @@ const login = asyncHandler(async (req, res) => {
   return res
     .status(201)
     .cookie("refreshToken", refreshToken, {
-      httpOnly: true,
+      ...cookieOptions,
       maxAge: env.REFRESH_TOKEN_EXPIRES * 1000,
-      sameSite: "strict",
-      secure: env.isProd,
-      priority: "high",
     })
     .cookie("accessToken", accessToken, {
-      httpOnly: true,
+      ...cookieOptions,
       maxAge: env.ACCESS_TOKEN_EXPIRES * 1000,
-      sameSite: "strict",
-      secure: env.isProd,
-      priority: "high",
     })
     .json(
       apiResponse(
